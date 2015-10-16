@@ -59,17 +59,46 @@ def page_not_found(error):
 #   These return JSON, rather than rendering pages. 
 #
 ###############
-@app.route("/_calc_times")
-def calc_times():
+
+def calc_times(time, date, miles):
   """
   Calculates open/close times from miles, using rules 
   described at http://www.rusa.org/octime_alg.html.
   Expects one URL-encoded argument, the number of miles. 
   """
-  app.logger.debug("Got a JSON request");
-  miles = request.args.get('miles', 0, type=int)
-  return jsonify(result=miles * 2)
- 
+  
+  h = time[:time.find(':')]
+  m = time[(time.find(':') + 1):]
+  date = date.replace(hours=+int(h))
+  date = date.replace(minutes=+int(m))
+
+  if (miles == 0):
+      opening_time = str(date.format('MMM DD, YYYY HH:mm'))
+      closing_time = str(date.replace(hours=+1).format('MMM DD, YYYY HH:mm'))
+  else:
+      opening_time = str(date.replace(hours=+get_opening_time(miles)).format('MMM DD, YYYY HH:mm'))
+      closing_time = str(date.replace(hours=+get_closing_time(miles)).format('MMM DD, YYYY HH:mm'))
+      
+  miles = "From " + opening_time + " to " + closing_time
+  return miles
+
+@app.route("/_calc_times")
+def jsonify_calc_times():
+    app.logger.debug("Got a JSON request");
+
+    miles = request.args.get('miles', 0, type=int)
+    metric = request.args.get('metric', 0, type=str)
+    if (metric == "miles"):
+        miles = round(miles * 1.60934)
+
+
+    str_date = request.args.get('date', 0, type=str)
+    date = arrow.get(str_date)  
+    time = request.args.get('time', 0, type=str)
+
+    return jsonify(result=calc_times(time, date, miles))
+
+
 #################
 #
 # Functions used within the templates
@@ -92,7 +121,33 @@ def format_arrow_time( time ):
     except:
         return "(bad time)"
 
+def get_opening_time(distance):
+    cont = 0
+    if (distance <= 200):
+        cont = distance / 34
+    elif (distance <= 400):
+        cont = 200 / 34 + (distance - 200) / 32
+    elif (distance <= 600):
+        cont = 200 / 34 + 200 / 32 + (distance - 400) / 30
+    elif (distance <= 1000):
+        cont = 200 / 34 + 200 / 32 + 200 / 30 + (distance - 600) / 28
+    elif (distance <= 1300):
+        cont = 200 / 34 + 200 / 32 + 200 / 30 + 400 / 28 + (distance - 1000) / 26
+    return cont
 
+def get_closing_time(distance):
+    cont = 0
+    if (distance <= 200):
+        cont = distance / 15
+    elif (distance <= 400):
+        cont = 200 / 15 + (distance - 200) / 15
+    elif (distance <= 600):
+        cont = 200 / 15 + 200 / 15 + (distance - 400) / 15
+    elif (distance <= 1000):
+        cont = 200 / 15 + 200 / 15 + 200 / 15 + (distance - 600) / 11.428
+    elif (distance <= 1300):
+        cont = 200 / 15 + 200 / 15 + 200 / 15 + 400 / 11.428 + (distance - 1000) / 13.333
+    return cont
 
 #############
 
